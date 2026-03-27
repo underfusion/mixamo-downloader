@@ -1,0 +1,13 @@
+{
+  "name": "mixamo-downloader",
+  "version": "1.0.0",
+  "description": "Mixamo batch animation downloader with embedded browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "install-app": "npm install"
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  }
+}

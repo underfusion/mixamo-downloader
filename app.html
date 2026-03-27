@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mixamo Downloader</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      flex-shrink: 0;
+    }
+    .topbar-title {
+      font-weight: 700;
+      font-size: 0.95em;
+      color: #58a6ff;
+    }
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8em;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #f85149;
+    }
+    .dot.ok { background: #3fb950; }
+    .dot.working { background: #d29922; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+
+    /* ── Main area: webview + sidebar ────────────────────────── */
+    .main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .browser-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+      flex-shrink: 0;
+    }
+    .browser-bar .url {
+      flex: 1;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 4px 10px;
+      color: #8b949e;
+      font-size: 0.8em;
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .nav-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+    .nav-btn:hover { background: #30363d; color: #e6edf3; }
+
+    webview {
+      flex: 1;
+      border: none;
+    }
+
+    /* ── Sidebar panel ───────────────────────────────────────── */
+    .sidebar {
+      width: 320px;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      padding: 14px;
+      border-bottom: 1px solid #21262d;
+    }
+    .panel-section:last-child { border-bottom: none; }
+
+    .panel-title {
+      font-size: 0.75em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .field-row {
+      margin-bottom: 10px;
+    }
+    .field-label {
+      font-size: 0.8em;
+      color: #8b949e;
+      margin-bottom: 4px;
+    }
+    .field-input {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: #e6edf3;
+      font-family: monospace;
+      font-size: 0.8em;
+    }
+    .field-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .folder-row {
+      display: flex;
+      gap: 6px;
+    }
+    .folder-row .field-input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary {
+      background: #238636;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-primary:disabled {
+      background: #21262d;
+      color: #484f58;
+      cursor: not-allowed;
+    }
+    .btn-danger {
+      background: #da3633;
+      color: #fff;
+    }
+    .btn-danger:hover { background: #f85149; }
+    .btn-secondary {
+      background: #21262d;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+    }
+    .btn-secondary:hover { background: #30363d; }
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 0.8em;
+      width: auto;
+    }
+
+    /* ── Progress ──────────────────────────────────────────── */
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #21262d;
+      border-radius: 3px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #238636;
+      border-radius: 3px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .stat-item {
+      background: #0d1117;
+      border-radius: 4px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.2em;
+      font-weight: 700;
+      color: #e6edf3;
+    }
+    .stat-label {
+      font-size: 0.7em;
+      color: #8b949e;
+      margin-top: 2px;
+    }
+
+    /* ── Log ───────────────────────────────────────────────── */
+    .log-area {
+      flex: 1;
+      min-height: 100px;
+      max-height: 250px;
+      overflow-y: auto;
+      background: #0d1117;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.72em;
+      line-height: 1.6;
+      color: #8b949e;
+    }
+    .log-line.ok { color: #3fb950; }
+    .log-line.err { color: #f85149; }
+    .log-line.skip { color: #d29922; }
+    .log-line.info { color: #58a6ff; }
+
+    /* ── Hidden ─────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span class="topbar-title">Mixamo Downloader</span>
+    <div class="topbar-status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Not logged in</span>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div class="main">
+
+    <!-- Browser panel -->
+    <div class="browser-panel">
+      <div class="browser-bar">
+        <button class="nav-btn" id="btnBack" title="Back">&#9664;</button>
+        <button class="nav-btn" id="btnForward" title="Forward">&#9654;</button>
+        <button class="nav-btn" id="btnRefresh" title="Refresh">&#8635;</button>
+        <div class="url" id="urlBar">https://www.mixamo.com/</div>
+      </div>
+      <webview
+        id="mixamo"
+        src="https://www.mixamo.com/"
+        partition="persist:mixamo"
+        style="flex:1;"
+        allowpopups
+      ></webview>
+    </div>
+
+    <!-- Sidebar controls -->
+    <div class="sidebar">
+
+      <div class="panel-section">
+        <div class="panel-title">Settings</div>
+
+        <div class="field-row">
+          <div class="field-label">Character ID</div>
+          <input class="field-input" id="characterId" value="721c276f-a08a-406a-bcf0-6a9e3c607770">
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">Output folder</div>
+          <div class="folder-row">
+            <input class="field-input" id="outputDir" value="Animations" readonly>
+            <button class="btn btn-secondary btn-sm" id="btnFolder">...</button>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">Format</div>
+          <input class="field-input" value="FBX 7.0 / 30 FPS" readonly style="color:#8b949e;">
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">Download</div>
+
+        <button class="btn btn-primary" id="btnDownload" disabled>
+          Download all animations
+        </button>
+        <button class="btn btn-secondary" id="btnRefreshList" disabled style="margin-top:6px;">
+          &#8635; Refresh animation list
+        </button>
+        <button class="btn btn-danger hidden" id="btnStop">
+          Stop
+        </button>
+        <button class="btn btn-secondary hidden" id="btnDownloadGifs" style="margin-top:6px;background:#6c3f9e;">
+          &#9654; Download / Fix GIFs
+        </button>
+
+        <div class="progress-bar-bg hidden" id="progressBarBg">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+
+        <div class="stats-grid hidden" id="statsGrid">
+          <div class="stat-item">
+            <div class="stat-value" id="statDownloaded">0</div>
+            <div class="stat-label">Downloaded</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statFailed">0</div>
+            <div class="stat-label">Errors</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statExists">0</div>
+            <div class="stat-label">Already exists</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statSkipped">0</div>
+            <div class="stat-label">Packs</div>
+          </div>
+          <div class="stat-item" style="grid-column:1/-1;">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">Total</div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary hidden" id="btnOpenFolder" style="margin-top:8px;">
+          Open folder
+        </button>
+      </div>
+
+      <div class="panel-section" style="flex:1; display:flex; flex-direction:column;">
+        <div class="panel-title">Activity Log</div>
+        <div class="log-area" id="logArea"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const webview = document.getElementById('mixamo');
+    const urlBar = document.getElementById('urlBar');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const btnDownload = document.getElementById('btnDownload');
+    const btnRefreshList = document.getElementById('btnRefreshList');
+    const btnStop = document.getElementById('btnStop');
+    const btnDownloadGifs = document.getElementById('btnDownloadGifs');
+    const btnFolder = document.getElementById('btnFolder');
+    const btnOpenFolder = document.getElementById('btnOpenFolder');
+    const btnBack = document.getElementById('btnBack');
+    const btnForward = document.getElementById('btnForward');
+    const btnRefresh = document.getElementById('btnRefresh');
+    const outputDirInput = document.getElementById('outputDir');
+    const characterIdInput = document.getElementById('characterId');
+    const progressBarBg = document.getElementById('progressBarBg');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const statsGrid = document.getElementById('statsGrid');
+    const logArea = document.getElementById('logArea');
+
+    let currentToken = null;
+    let isDownloading = false;
+    let selectedFolder = null;
+
+    // ── Navigation ──────────────────────────────────────────
+    btnBack.addEventListener('click', () => webview.goBack());
+    btnForward.addEventListener('click', () => webview.goForward());
+    btnRefresh.addEventListener('click', () => webview.reload());
+
+    webview.addEventListener('did-navigate', (e) => {
+      urlBar.textContent = e.url;
+    });
+    webview.addEventListener('did-navigate-in-page', (e) => {
+      urlBar.textContent = e.url;
+    });
+
+    // ── Token detection ─────────────────────────────────────
+    let tokenCheckInterval = null;
+
+    webview.addEventListener('dom-ready', () => {
+      startTokenPolling();
+    });
+
+    function startTokenPolling() {
+      if (tokenCheckInterval) clearInterval(tokenCheckInterval);
+      tokenCheckInterval = setInterval(checkForToken, 3000);
+      checkForToken(); // check immediately
+    }
+
+    async function checkForToken() {
+      try {
+        const token = await webview.executeJavaScript(
+          'localStorage.getItem("access_token") || ""'
+        );
+        if (token && token.length > 20) {
+          currentToken = token;
+          statusDot.className = 'dot ok';
+          statusText.textContent = 'Logged in';
+          if (!isDownloading) {
+            btnDownload.disabled = false;
+            btnRefreshList.disabled = false;
+            btnDownloadGifs.classList.remove('hidden');
+          }
+        } else {
+          currentToken = null;
+          statusDot.className = 'dot';
+          statusText.textContent = 'Not logged in';
+          if (!isDownloading) {
+            btnDownload.disabled = true;
+            btnRefreshList.disabled = true;
+            btnDownloadGifs.classList.add('hidden');
+          }
+        }
+      } catch (e) {
+        // webview not ready yet
+      }
+    }
+
+    // Also try to detect character ID from webview
+    webview.addEventListener('did-navigate', async () => {
+      try {
+        const charId = await webview.executeJavaScript(`
+          (function() {
+            try {
+              const state = window.__STORE__?.getState?.();
+              if (state?.characters?.selected?.id) return state.characters.selected.id;
+            } catch(e) {}
+            return '';
+          })()
+        `);
+        if (charId && charId.length > 10) {
+          characterIdInput.value = charId;
+        }
+      } catch (e) {}
+    });
+
+    // ── Folder selection ────────────────────────────────────
+    btnFolder.addEventListener('click', async () => {
+      const folder = await window.api.selectFolder();
+      if (folder) {
+        selectedFolder = folder;
+        // Show just the last folder name
+        const parts = folder.replace(/\\/g, '/').split('/');
+        outputDirInput.value = folder;
+      }
+    });
+
+    btnOpenFolder.addEventListener('click', () => {
+      const dir = selectedFolder || outputDirInput.value;
+      if (dir) window.api.openFolder(dir);
+    });
+
+    // ── Download ────────────────────────────────────────────
+    let forceRefreshNext = false;
+    const stats = { downloaded: 0, failed: 0, skipped: 0, exists: 0, total: 0 };
+
+    function updateStats() {
+      document.getElementById('statDownloaded').textContent = stats.downloaded;
+      document.getElementById('statFailed').textContent = stats.failed;
+      document.getElementById('statSkipped').textContent = stats.skipped;
+      document.getElementById('statExists').textContent = stats.exists;
+      document.getElementById('statTotal').textContent = stats.total;
+    }
+
+    function addLog(msg, cls = '') {
+      const line = document.createElement('div');
+      line.className = 'log-line ' + cls;
+      line.textContent = msg;
+      logArea.appendChild(line);
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function setProgress(current, total) {
+      if (total <= 0) return;
+      const pct = Math.round((current / total) * 100);
+      progressBarFill.style.width = pct + '%';
+    }
+
+    btnRefreshList.addEventListener('click', () => {
+      forceRefreshNext = true;
+      addLog('Next run will fetch a fresh animation list.', 'info');
+      btnRefreshList.textContent = '✓ List will be refreshed';
+    });
+
+    btnDownloadGifs.addEventListener('click', async () => {
+      if (!currentToken) { addLog('No token!', 'err'); return; }
+
+      isDownloading = true;
+      btnDownload.classList.add('hidden');
+      btnRefreshList.classList.add('hidden');
+      btnDownloadGifs.classList.add('hidden');
+      btnStop.classList.remove('hidden');
+      progressBarBg.classList.remove('hidden');
+      statsGrid.classList.remove('hidden');
+      btnOpenFolder.classList.remove('hidden');
+      logArea.innerHTML = '';
+
+      stats.downloaded = 0; stats.failed = 0; stats.skipped = 0; stats.exists = 0; stats.total = 0;
+      updateStats();
+
+      const outputDir = selectedFolder || outputDirInput.value;
+      const characterId = characterIdInput.value.trim();
+      addLog('Downloading / fixing GIFs...', 'info');
+      addLog('Packs: fetching individual thumbnails per animation', 'info');
+      statusDot.className = 'dot working';
+      statusText.textContent = 'GIFs...';
+
+      const result = await window.api.downloadGifs({ token: currentToken, characterId, outputDir });
+
+      isDownloading = false;
+      btnDownload.classList.remove('hidden');
+      btnRefreshList.classList.remove('hidden');
+      btnDownloadGifs.classList.remove('hidden');
+      btnStop.classList.add('hidden');
+      statusDot.className = 'dot ok';
+
+      if (result.ok) {
+        const s = result.stats;
+        addLog(`=== GIFs done === Downloaded: ${s.downloaded}, Skipped: ${s.skipped}, Errors: ${s.failed}`, 'ok');
+        statusText.textContent = 'GIFs done!';
+      } else {
+        addLog(`Error: ${result.error}`, 'err');
+        statusText.textContent = 'Error!';
+      }
+    });
+
+    // Handle gif-progress events
+    window.api.onProgress((data) => {
+      if (data.type === 'gif-progress') {
+        const pct = data.total > 0 ? (data.done / data.total * 100).toFixed(1) : 0;
+        progressBarFill.style.width = pct + '%';
+        statDownloaded.textContent = data.downloaded;
+        statFailed.textContent = data.failed;
+        statExists.textContent = data.skipped;
+        statTotal.textContent = data.total;
+      }
+    });
+
+    btnDownload.addEventListener('click', async () => {
+      if (!currentToken) {
+        addLog('No token — please log in to Mixamo!', 'err');
+        return;
+      }
+
+      isDownloading = true;
+      btnDownload.classList.add('hidden');
+      btnRefreshList.classList.add('hidden');
+      btnStop.classList.remove('hidden');
+      progressBarBg.classList.remove('hidden');
+      statsGrid.classList.remove('hidden');
+      btnOpenFolder.classList.remove('hidden');
+
+      // Reset stats
+      stats.downloaded = 0;
+      stats.failed = 0;
+      stats.skipped = 0;
+      stats.exists = 0;
+      stats.total = 0;
+      updateStats();
+      logArea.innerHTML = '';
+
+      const outputDir = selectedFolder || outputDirInput.value;
+      const characterId = characterIdInput.value.trim();
+
+      addLog('Starting download...', 'info');
+      addLog(`Character: ${characterId}`, 'info');
+      addLog(`Folder: ${outputDir}`, 'info');
+
+      statusDot.className = 'dot working';
+      statusText.textContent = 'Downloading...';
+
+      const result = await window.api.startDownload({
+        token: currentToken,
+        characterId,
+        outputDir,
+        forceRefresh: forceRefreshNext
+      });
+      forceRefreshNext = false;
+      btnRefreshList.textContent = '↻ Refresh animation list';
+
+      isDownloading = false;
+      btnDownload.classList.remove('hidden');
+      btnRefreshList.classList.remove('hidden');
+      btnStop.classList.add('hidden');
+      btnDownload.disabled = false;
+      btnRefreshList.disabled = false;
+
+      statusDot.className = 'dot ok';
+
+      if (result.ok) {
+        addLog('=== DONE ===', 'ok');
+        statusText.textContent = 'Done!';
+      } else {
+        addLog('Error: ' + result.error, 'err');
+        statusText.textContent = 'Error';
+      }
+    });
+
+    btnStop.addEventListener('click', async () => {
+      await window.api.stopDownload();
+      addLog('Stopped by user.', 'skip');
+      btnStop.classList.add('hidden');
+      btnDownload.classList.remove('hidden');
+      isDownloading = false;
+      statusDot.className = 'dot ok';
+      statusText.textContent = 'Stopped';
+    });
+
+    // ── Progress from main process ──────────────────────────
+    window.api.onProgress((data) => {
+      switch (data.type) {
+        case 'log':
+          addLog(data.message, 'info');
+          break;
+
+        case 'list':
+          stats.total = data.count;
+          updateStats();
+          addLog(`Page ${data.page}/${data.totalPages} — found ${data.count} animations`, 'info');
+          break;
+
+        case 'exporting':
+          setProgress(data.index, data.total);
+          addLog(`[${data.index}/${data.total}] Exporting: ${data.name}...`);
+          break;
+
+        case 'downloading':
+          addLog(`[${data.index}/${data.total}] Downloading: ${data.name}...`);
+          break;
+
+        case 'done': {
+          const mb = (data.bytes / 1024 / 1024).toFixed(2);
+          stats.downloaded++;
+          updateStats();
+          setProgress(data.index, data.total);
+          addLog(`[${data.index}/${data.total}] OK: ${data.name} (${mb} MB)`, 'ok');
+          break;
+        }
+
+        case 'exists':
+          stats.exists++;
+          updateStats();
+          setProgress(data.index, data.total);
+          addLog(`[${data.index}/${data.total}] Already exists: ${data.name}`, 'skip');
+          break;
+
+        case 'skip':
+          stats.skipped++;
+          updateStats();
+          setProgress(data.index, data.total);
+          addLog(`[${data.index}/${data.total}] Pack (skipping): ${data.name}`, 'skip');
+          break;
+
+        case 'error':
+          stats.failed++;
+          updateStats();
+          setProgress(data.index, data.total);
+          addLog(`[${data.index}/${data.total}] ERROR: ${data.name} — ${data.error}`, 'err');
+          break;
+
+        case 'statsUpdate':
+          stats.downloaded = data.stats.downloaded;
+          stats.exists = data.stats.exists;
+          stats.failed = data.stats.failed;
+          updateStats();
+          break;
+
+        case 'aborted':
+          addLog('Download aborted.', 'skip');
+          break;
+      }
+    });
+  </script>
+</body>
+</html>

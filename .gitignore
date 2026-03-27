@@ -1,0 +1,9 @@
+node_modules/
+Animations/
+animations-cache.json
+animation-library.json
+animation-library.csv
+LIBRARY_README.md
+download.log
+pack-debug.json
+*.log
