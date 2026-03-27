@@ -14,8 +14,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ANIM_DIR   = path.join(__dirname, 'Animations');
-const CACHE_FILE = path.join(__dirname, 'animations-cache.json');
+const ANIM_DIR   = path.join(__dirname, '..', 'Animations');
+const CACHE_FILE = path.join(__dirname, '..', 'animations-cache.json');
 
 const DRY_RUN = !process.argv.includes('--move');
 

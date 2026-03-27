@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('path');
-const { downloadAll, downloadAllGifs } = require('./downloader.js');
+const { downloadAll, downloadAllGifs } = require('./src/downloader.js');
 
 let mainWindow;
 let abortController = null;
@@ -12,14 +12,14 @@ app.whenReady().then(() => {
     title: 'Mixamo Downloader',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'src', 'preload.js'),
       webviewTag: true,
       nodeIntegration: false,
       contextIsolation: true,
     }
   });
 
-  mainWindow.loadFile('app.html');
+  mainWindow.loadFile('src/app.html');
 
   // Allow webview to open Adobe login popups
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

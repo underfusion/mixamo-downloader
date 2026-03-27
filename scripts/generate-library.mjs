@@ -13,9 +13,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname    = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_FILE   = path.join(__dirname, 'animations-cache.json');
+const CACHE_FILE   = path.join(__dirname, '..', 'animations-cache.json');
 
-const ANIM_DIR     = process.argv[2] || path.join(__dirname, 'Animations');
+const ANIM_DIR     = process.argv[2] || path.join(__dirname, '..', 'Animations');
 const GIF_DIR      = path.join(ANIM_DIR, '_GIF');
 const OUT_JSON     = path.join(ANIM_DIR, 'animation-library.json');
 const OUT_CSV      = path.join(ANIM_DIR, 'animation-library.csv');
