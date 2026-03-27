@@ -5,9 +5,9 @@ const PAGE_LIMIT        = 96;
 const POLL_INTERVAL_MS  = 500;
 const MAX_POLL_ATTEMPTS = 60;
 const DELAY_BETWEEN_MS  = 200;
-const CACHE_FILE        = path.join(__dirname, 'animations-cache.json');
+const CACHE_FILE        = path.join(__dirname, '..', 'animations-cache.json');
 const CACHE_MAX_AGE_MS  = 24 * 60 * 60 * 1000; // 24h
-const LOG_FILE          = path.join(__dirname, 'download.log');
+const LOG_FILE          = path.join(__dirname, '..', 'download.log');
 const LIBRARY_SAVE_EVERY = 20; // save library every N updates
 
 function writeLog(msg) {

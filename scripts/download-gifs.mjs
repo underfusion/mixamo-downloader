@@ -15,9 +15,9 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CACHE_FILE   = path.join(__dirname, 'animations-cache.json');
+const CACHE_FILE   = path.join(__dirname, '..', 'animations-cache.json');
 // GIFs go inside the animations folder: first CLI arg or default
-const ANIM_DIR     = process.argv[2] || path.join(__dirname, 'Animations');
+const ANIM_DIR     = process.argv[2] || path.join(__dirname, '..', 'Animations');
 const OUTPUT_DIR   = path.join(ANIM_DIR, '_GIF');
 const DELAY_MS     = 50;
 const CONCURRENCY  = 8;

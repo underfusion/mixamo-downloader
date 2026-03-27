@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 import readline from 'readline';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ANIMATIONS_DIR = path.join(__dirname, 'Animations');
+const ANIMATIONS_DIR = path.join(__dirname, '..', 'Animations');
 
 // ── Config ──────────────────────────────────────────────────────────
 const CHARACTER_ID = '721c276f-a08a-406a-bcf0-6a9e3c607770';
@@ -191,16 +191,16 @@ async function main() {
   // Get bearer token
   let bearer = process.argv[2];
   if (!bearer) {
-    console.log('Aby uzyskac token:');
-    console.log('  1. Zaloguj sie na mixamo.com');
-    console.log('  2. Otworz DevTools (F12) > Console');
-    console.log('  3. Wpisz:  localStorage.access_token');
-    console.log('  4. Skopiuj wynik (bez cudzyslowow)\n');
-    bearer = await prompt('Wklej token: ');
+    console.log('To get your token:');
+    console.log('  1. Log in to mixamo.com');
+    console.log('  2. Open DevTools (F12) > Console');
+    console.log('  3. Type:  localStorage.access_token');
+    console.log('  4. Copy the result (without quotes)\n');
+    bearer = await prompt('Paste token: ');
   }
 
   if (!bearer) {
-    console.error('Brak tokena. Zamykam.');
+    console.error('No token provided. Exiting.');
     process.exit(1);
   }
 
@@ -214,7 +214,7 @@ async function main() {
 
   // Fetch full list
   const anims = await getAllAnimations(bearer);
-  console.log(`\nZnaleziono ${anims.length} animacji. Rozpoczynam pobieranie...\n`);
+  console.log(`\nFound ${anims.length} animations. Starting download...\n`);
 
   const stats = { downloaded: 0, skipped: 0, exists: 0, failed: 0 };
 
@@ -227,20 +227,20 @@ async function main() {
       stats[result]++;
     } catch (err) {
       stats.failed++;
-      console.error(`[${i + 1}/${anims.length}] BLAD: ${anim.description} - ${err.message}`);
+      console.error(`[${i + 1}/${anims.length}] ERROR: ${anim.description} — ${err.message}`);
     }
     await sleep(DELAY_BETWEEN_DOWNLOADS_MS);
   }
 
-  console.log('\n=== GOTOWE ===');
-  console.log(`Pobrane:    ${stats.downloaded}`);
-  console.log(`Pominiete:  ${stats.skipped} (packi)`);
-  console.log(`Istniejace: ${stats.exists}`);
-  console.log(`Bledy:      ${stats.failed}`);
-  console.log(`\nPliki w: ${ANIMATIONS_DIR}`);
+  console.log('\n=== DONE ===');
+  console.log(`Downloaded: ${stats.downloaded}`);
+  console.log(`Skipped:    ${stats.skipped} (packs)`);
+  console.log(`Existing:   ${stats.exists}`);
+  console.log(`Errors:     ${stats.failed}`);
+  console.log(`\nFiles saved to: ${ANIMATIONS_DIR}`);
 }
 
 main().catch(err => {
-  console.error('Krytyczny blad:', err.message);
+  console.error('Fatal error:', err.message);
   process.exit(1);
 });

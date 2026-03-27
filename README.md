@@ -93,24 +93,24 @@ These scripts can be run independently from the command line:
 ### Generate / rebuild the animation library
 
 ```bash
-node generate-library.mjs [output_dir]
+node scripts/generate-library.mjs [output_dir]
 # With API enrichment (fps, loop info):
-set MIXAMO_TOKEN=<your_bearer_token> && node generate-library.mjs [output_dir]
+set MIXAMO_TOKEN=<your_bearer_token> && node scripts/generate-library.mjs [output_dir]
 ```
 
 ### Download GIFs only
 
 ```bash
-node download-gifs.mjs [output_dir]
+node scripts/download-gifs.mjs [output_dir]
 # With pack GIFs (requires token):
-set MIXAMO_TOKEN=<your_bearer_token> && node download-gifs.mjs [output_dir]
+set MIXAMO_TOKEN=<your_bearer_token> && node scripts/download-gifs.mjs [output_dir]
 ```
 
 ### Reorganize flat folder into packs
 
 ```bash
-node reorganize.mjs            # dry-run — analysis only
-node reorganize.mjs --move     # actually moves files
+node scripts/reorganize.mjs            # dry-run — analysis only
+node scripts/reorganize.mjs --move     # actually moves files
 ```
 
 ---
