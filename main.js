@@ -94,5 +94,6 @@ ipcMain.handle('stop-download', () => {
 
 ipcMain.handle('open-folder', async (event, folderPath) => {
   const { shell } = require('electron');
-  shell.openPath(folderPath);
+  const absPath = path.isAbsolute(folderPath) ? folderPath : path.join(__dirname, folderPath);
+  shell.openPath(absPath);
 });
