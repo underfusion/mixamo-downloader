@@ -443,7 +443,7 @@ function autoReorganize(outputDir, packMap, onProgress) {
 
 // ── Pack handler ─────────────────────────────────────────────────────
 
-async function downloadPack(bearer, characterId, anim, index, total, outputDir, gifDir, packMap, libraryEntries, onProgress) {
+async function downloadPack(bearer, characterId, anim, index, total, outputDir, gifDir, packMap, libraryEntries, onProgress, rigBones) {
   const packDesc = anim.description;
   const result   = { downloaded: 0, exists: 0, failed: 0 };
 
@@ -509,8 +509,9 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         }
 
         // Update library entry
+        const _existsId = motion.product_id || `${anim.id}_${sanitize(motionName)}`;
         upsertLibraryEntry(libraryEntries, {
-          id:                 motion.product_id || `${anim.id}_${sanitize(motionName)}`,
+          id:                 _existsId,
           motion_id:          motion.motion_id  || null,
           source:             'mixamo',
           type:               'Motion',
@@ -525,6 +526,7 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
           gif_downloaded:     fs.existsSync(gifPath),
           thumbnail:          packThumb,
           thumbnail_animated: packThumbGif,
+          ...(!libraryEntries[_existsId]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
         });
         continue;
       }
@@ -564,6 +566,8 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
           gif_downloaded:     gifOk,
           thumbnail:          packThumb,
           thumbnail_animated: packThumbGif,
+          rig_bones:          rigBones,
+          character_id:       characterId,
         });
 
         await sleep(DELAY_BETWEEN_MS);
@@ -597,6 +601,7 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: fs.existsSync(gifPath),
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        ...(!libraryEntries[anim.id]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
       });
     } else {
       const gms   = details.gms_hash;
@@ -619,6 +624,7 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: gifOk,
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        rig_bones: rigBones, character_id: characterId,
       });
       await sleep(DELAY_BETWEEN_MS);
     }
@@ -641,8 +647,10 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
  * @param {AbortSignal} opts.abortSignal
  * @param {Function} opts.onProgress
  * @param {boolean} opts.forceRefresh
+ * @param {number} [opts.rigBones]      — number of bones in the character rig (e.g. 65 = with fingers, 25 = no fingers)
  */
-async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal, onProgress, forceRefresh }) {
+async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal, onProgress, forceRefresh, rigBones }) {
+  rigBones = rigBones || 65;
   // All output lives inside the user-chosen outputDir
   const resolvedGifDir = gifDir || path.join(outputDir, '_GIF');
   const libraryFile    = path.join(outputDir, 'animation-library.json');
@@ -697,7 +705,7 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
       if (isPack) {
         const packResult = await downloadPack(
           bearer, characterId, anim, i + 1, total,
-          outputDir, resolvedGifDir, packMap, libraryEntries, onProgress
+          outputDir, resolvedGifDir, packMap, libraryEntries, onProgress, rigBones
         );
         stats.downloaded += packResult.downloaded;
         stats.exists     += packResult.exists;
@@ -730,6 +738,8 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
           fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
           fbx_downloaded: true, gif_downloaded: fs.existsSync(gifPath),
           thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+          // Retroactively tag only if not already set (file existed before this feature)
+          ...(!libraryEntries[anim.id]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
         });
 
         libDirtyCount++;
@@ -761,6 +771,7 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
         fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: gifOk,
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        rig_bones: rigBones, character_id: characterId,
       });
 
       libDirtyCount++;
@@ -787,7 +798,8 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
 // Force-overwrites pack GIFs with individual thumbnails.
 // Regular GIFs are skipped if they already exist.
 
-async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, onProgress }) {
+async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, onProgress, rigBones }) {
+  rigBones = rigBones || 65;
   const gifDir      = path.join(outputDir, '_GIF');
   const libraryFile = path.join(outputDir, 'animation-library.json');
 
