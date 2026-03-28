@@ -40,7 +40,7 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0] || null;
 });
 
-ipcMain.handle('start-download', async (event, { token, characterId, outputDir, forceRefresh }) => {
+ipcMain.handle('start-download', async (event, { token, characterId, outputDir, forceRefresh, rigBones }) => {
   abortController = new AbortController();
 
   try {
@@ -49,6 +49,7 @@ ipcMain.handle('start-download', async (event, { token, characterId, outputDir, 
       characterId,
       outputDir,
       forceRefresh: !!forceRefresh,
+      rigBones: rigBones || 65,
       abortSignal: abortController.signal,
       onProgress: (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -62,13 +63,14 @@ ipcMain.handle('start-download', async (event, { token, characterId, outputDir, 
   }
 });
 
-ipcMain.handle('download-gifs', async (event, { token, characterId, outputDir }) => {
+ipcMain.handle('download-gifs', async (event, { token, characterId, outputDir, rigBones }) => {
   abortController = new AbortController();
   try {
     const stats = await downloadAllGifs({
       bearer: token,
       characterId,
       outputDir,
+      rigBones: rigBones || 65,
       abortSignal: abortController.signal,
       onProgress: (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
