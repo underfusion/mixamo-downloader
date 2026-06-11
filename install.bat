@@ -1,10 +1,10 @@
 @echo off
-title Mixamo Downloader - Instalacja
+title Mixamo Downloader - Install
 cd /d "%~dp0"
-echo === Instalacja Mixamo Downloader ===
+echo === Installing Mixamo Downloader ===
 echo.
-echo Instalowanie Electron...
+echo Installing Electron...
 npm install
 echo.
-echo === Gotowe! Uruchom start.bat ===
+echo === Done! Run start.bat ===
 pause

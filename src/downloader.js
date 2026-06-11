@@ -33,6 +33,26 @@ function rel(...parts) {
   return path.join(...parts).replace(/\\/g, '/');
 }
 
+// ── Rig helpers ───────────────────────────────────────────────────────
+
+const LEGACY_BONES = 25; // bone count assumed for pre-migration (no-finger) animations
+
+function getRigDir(outputDir, rigBones) {
+  return path.join(outputDir, `rig_${rigBones}`);
+}
+
+function getLibraryFile(outputDir, rigBones) {
+  return path.join(outputDir, `animation-library-${rigBones}.json`);
+}
+
+// Returns all animation-library-{N}.json files in outputDir
+function getAllLibraryFiles(outputDir) {
+  if (!fs.existsSync(outputDir)) return [];
+  return fs.readdirSync(outputDir)
+    .filter(f => /^animation-library-\d+\.json$/.test(f))
+    .map(f => path.join(outputDir, f));
+}
+
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
@@ -190,10 +210,10 @@ function getUniquePacks(allAnims) {
   });
 }
 
-function generateReadmeContent(allAnims, libraryEntries) {
+function generateReadmeContent(allAnims, allLibraryEntries, rigStats) {
   const uniquePacks  = getUniquePacks(allAnims);
   const regularAnims = allAnims.filter(a => a.type !== 'MotionPack');
-  const animations   = Object.values(libraryEntries);
+  const animations   = Object.values(allLibraryEntries);
 
   const regularIdSet = new Set(regularAnims.map(a => a.id));
   let dupCount = 0, uniquePackCount = 0;
@@ -216,6 +236,16 @@ function generateReadmeContent(allAnims, libraryEntries) {
     return `| ${p.name.padEnd(38)} | ${String(mc).padStart(3)} | ${String(dups).padStart(3)} dup + ${String(mc - dups).padStart(3)} unique |`;
   }).sort();
 
+  // Rig variant summary rows
+  const rigRows = rigStats.map(r =>
+    `| ${String(r.bones).padStart(6)} | ${r.label.padEnd(30)} | ${String(r.fbx).padStart(6)} | animation-library-${r.bones}.json |`
+  );
+
+  // Rig-based folder tree lines
+  const rigTreeLines = rigStats.map(r =>
+    `├── rig_${r.bones}/                   ← ${r.fbx} FBX files (${r.bones} bones${r.bones <= 26 ? ', no fingers' : ', full rig'})\n│   ├── Animations/\n│   └── _Packs/`
+  ).join('\n│\n');
+
   return `# Mixamo Animation Library
 
 Generated: ${generatedAt}
@@ -223,43 +253,42 @@ Source: Mixamo (mixamo.com)
 
 ---
 
+## Rig Variants
+
+This library contains animations downloaded for multiple character rigs.
+Each rig gets its own subfolder and library file.
+
+| Bones | Description                    | FBX files | Library file |
+|-------|--------------------------------|-----------|--------------|
+${rigRows.join('\n')}
+
+---
+
 ## Folder Structure
 
-All paths below are relative to this file's location (the animations root folder).
+All paths are relative to this file's location (the animations root folder).
 
 \`\`\`
 [this folder]/
 │
-├── LIBRARY_README.md           ← this file
-├── animation-library.json      ← full machine-readable index
+├── LIBRARY_README.md
 │
-├── Animations/                 ← ${regularAnims.length} standalone animations
-│   ├── Running.fbx
-│   ├── Idle.fbx
-│   └── ...
+${rigTreeLines}
 │
-├── _Packs/                     ← ${uniquePacks.length} animation packs
-│   ├── [Pack Name]/
-│   │   ├── animation.fbx
-│   │   └── ...
-│   └── ...
-│
-└── _GIF/                       ← animated preview GIFs (mirror structure)
-    ├── Running.gif
-    ├── Idle.gif
-    ├── ...
+└── _GIF/                       ← shared animated preview GIFs (all rigs)
+    ├── *.gif                   ← standalone animation previews
     └── _Packs/
         └── [Pack Name]/*.gif
 \`\`\`
 
 ---
 
-## Statistics
+## Statistics (all rigs combined)
 
 | Category                   | Count  |
 |----------------------------|--------|
 | Total animations           | ${String(animations.length).padStart(6)} |
-| Standalone (root)          | ${String(standaloneCount).padStart(6)} |
+| Standalone                 | ${String(standaloneCount).padStart(6)} |
 | Pack animations            | ${String(packAnimCount).padStart(6)} |
 | — duplicates of standalone | ${String(dupCount).padStart(6)} |
 | — unique to packs only     | ${String(uniquePackCount).padStart(6)} |
@@ -276,37 +305,9 @@ Mixamo packs are themed bundles — most of their content is a curated selection
 of animations that also exist individually in the catalog.
 They share the **same Mixamo product_id** — it is literally the same file.
 
-### How duplicates are marked in animation-library.json
-
-**Standalone entry** gets \`also_in_packs\`:
-\`\`\`json
-{
-  "description": "Running",
-  "pack": null,
-  "also_in_packs": ["Male Locomotion Pack"],
-  "fbx_file": "Running.fbx"
-}
-\`\`\`
-
-**Pack entry** gets \`standalone_duplicate\`:
-\`\`\`json
-{
-  "name": "running",
-  "pack": "Male Locomotion Pack",
-  "standalone_duplicate": {
-    "id": "...",
-    "description": "Running",
-    "fbx_file": "Running.fbx",
-    "gif_file": "_GIF/Running.gif"
-  }
-}
-\`\`\`
-
-**${uniquePackCount} animations are unique to their pack** — they do not exist as standalone.
-
 ---
 
-## animation-library.json Fields
+## Library JSON Fields
 
 | Field                  | Type        | Description |
 |------------------------|-------------|-------------|
@@ -317,6 +318,8 @@ They share the **same Mixamo product_id** — it is literally the same file.
 | \`name\`                 | string      | Short display name |
 | \`description\`          | string      | Full name used as filename |
 | \`character_type\`       | string      | Rig type, e.g. \`"human"\` |
+| \`rig_bones\`            | number      | Number of bones in the downloaded rig |
+| \`character_id\`         | string      | Mixamo character UUID used for download |
 | \`pack\`                 | string/null | Pack name, or \`null\` for standalone |
 | \`pack_description\`     | string/null | All motion names in the pack, comma-separated |
 | \`fbx_file\`             | string      | Relative path to .fbx from this file |
@@ -325,8 +328,6 @@ They share the **same Mixamo product_id** — it is literally the same file.
 | \`gif_downloaded\`       | boolean     | \`true\` if .gif exists on disk |
 | \`also_in_packs\`        | string[]    | *(standalone only)* pack names that include this animation |
 | \`standalone_duplicate\` | object/null | *(pack only)* reference to standalone version if exists |
-| \`fps\`                  | number/null | Frames per second (from API enrichment) |
-| \`loop\`                 | bool/null   | Loops? (from API enrichment) |
 | \`thumbnail\`            | string      | CDN URL to static PNG preview |
 | \`thumbnail_animated\`   | string      | CDN URL to animated GIF preview |
 | \`updated_at\`           | string      | ISO 8601 timestamp |
@@ -343,9 +344,9 @@ ${packRows.join('\n')}
 
 ## Using This Library
 
-### Load all standalone animations
+### Load all standalone animations for a specific rig
 \`\`\`js
-const lib = JSON.parse(fs.readFileSync('animation-library.json'));
+const lib = JSON.parse(fs.readFileSync('animation-library-65.json'));
 const standalone = lib.animations.filter(a => !a.pack && a.fbx_downloaded);
 \`\`\`
 
@@ -361,9 +362,29 @@ const unique = lib.animations.filter(a => !a.pack || !a.standalone_duplicate);
 `;
 }
 
-function saveReadme(allAnims, libraryEntries, outputDir) {
+function saveReadme(allAnims, outputDir) {
   try {
-    const content = generateReadmeContent(allAnims, libraryEntries);
+    // Load all rig libraries and compute per-rig stats
+    const libFiles = getAllLibraryFiles(outputDir);
+    const allEntries = {};
+    const rigStats = [];
+
+    for (const libFile of libFiles) {
+      const entries = loadLibrary(libFile);
+      const anims   = Object.values(entries);
+      const bones   = parseInt(path.basename(libFile).match(/\d+/)?.[0] || '0', 10);
+      const fbx     = anims.filter(e => e.fbx_downloaded).length;
+      rigStats.push({
+        bones,
+        label: bones <= 26 ? 'No fingers (simplified)' : 'Full rig (with fingers)',
+        fbx,
+      });
+      Object.assign(allEntries, entries);
+    }
+
+    rigStats.sort((a, b) => a.bones - b.bones);
+
+    const content = generateReadmeContent(allAnims, allEntries, rigStats);
     fs.writeFileSync(path.join(outputDir, 'LIBRARY_README.md'), content, 'utf8');
   } catch { /* non-critical */ }
 }
@@ -402,10 +423,11 @@ function buildPackMap(allAnims) {
 
 // ── Auto-reorganize flat folder ───────────────────────────────────────
 
-function autoReorganize(outputDir, packMap, onProgress) {
+function autoReorganize(outputDir, packMap, onProgress, rigDir) {
   if (!fs.existsSync(outputDir)) return;
-  const files    = fs.readdirSync(outputDir).filter(f => f.endsWith('.fbx'));
-  const animDir  = path.join(outputDir, 'Animations');
+  const targetDir = rigDir || outputDir;
+  const files     = fs.readdirSync(outputDir).filter(f => f.endsWith('.fbx'));
+  const animDir   = path.join(targetDir, 'Animations');
   let movedPacks = 0, movedAnims = 0;
 
   for (const file of files) {
@@ -413,8 +435,8 @@ function autoReorganize(outputDir, packMap, onProgress) {
     const packName = packMap[file];
 
     if (packName) {
-      // Move to _Packs/{pack}/
-      const toDir  = path.join(outputDir, '_Packs', packName);
+      // Move to {rigDir}/_Packs/{pack}/
+      const toDir  = path.join(targetDir, '_Packs', packName);
       const toPath = path.join(toDir, file);
       try {
         if (!fs.existsSync(toDir)) fs.mkdirSync(toDir, { recursive: true });
@@ -423,7 +445,7 @@ function autoReorganize(outputDir, packMap, onProgress) {
         movedPacks++;
       } catch (err) { writeLog(`REORGANIZE ERR (pack): "${file}" — ${err.message}`); }
     } else {
-      // Move regular animation to Animations/
+      // Move regular animation to {rigDir}/Animations/
       const toPath = path.join(animDir, file);
       try {
         if (!fs.existsSync(animDir)) fs.mkdirSync(animDir, { recursive: true });
@@ -435,7 +457,63 @@ function autoReorganize(outputDir, packMap, onProgress) {
   }
 
   if (movedPacks > 0 || movedAnims > 0) {
-    const msg = `Auto-reorganize: ${movedAnims} files → Animations/, ${movedPacks} pack files → _Packs/.`;
+    const rigLabel = rigDir ? path.basename(rigDir) + '/' : '';
+    const msg = `Auto-reorganize: ${movedAnims} files → ${rigLabel}Animations/, ${movedPacks} pack files → ${rigLabel}_Packs/.`;
+    writeLog(msg);
+    onProgress?.({ type: 'log', message: msg });
+  }
+}
+
+// ── One-time migration: flat structure → rig_XX/ subfolders ──────────
+// Runs automatically on first download after this update.
+// Moves existing Animations/ and _Packs/ into rig_25/ (legacy bone count).
+
+function migrateToRigFolders(outputDir, onProgress) {
+  const rigDir      = path.join(outputDir, `rig_${LEGACY_BONES}`);
+  const oldAnimDir  = path.join(outputDir, 'Animations');
+  const newAnimDir  = path.join(rigDir, 'Animations');
+  const oldPacksDir = path.join(outputDir, '_Packs');
+  const newPacksDir = path.join(rigDir, '_Packs');
+  const oldLibFile  = path.join(outputDir, 'animation-library.json');
+  const newLibFile  = getLibraryFile(outputDir, LEGACY_BONES);
+  let migrated = false;
+
+  if (fs.existsSync(oldAnimDir) && !fs.existsSync(newAnimDir)) {
+    try {
+      if (!fs.existsSync(rigDir)) fs.mkdirSync(rigDir, { recursive: true });
+      fs.renameSync(oldAnimDir, newAnimDir);
+      migrated = true;
+      writeLog(`MIGRATE: Animations/ → rig_${LEGACY_BONES}/Animations/`);
+    } catch (err) { writeLog(`MIGRATE ERR Animations: ${err.message}`); }
+  }
+
+  if (fs.existsSync(oldPacksDir) && !fs.existsSync(newPacksDir)) {
+    try {
+      if (!fs.existsSync(rigDir)) fs.mkdirSync(rigDir, { recursive: true });
+      fs.renameSync(oldPacksDir, newPacksDir);
+      migrated = true;
+      writeLog(`MIGRATE: _Packs/ → rig_${LEGACY_BONES}/_Packs/`);
+    } catch (err) { writeLog(`MIGRATE ERR _Packs: ${err.message}`); }
+  }
+
+  if (fs.existsSync(oldLibFile) && !fs.existsSync(newLibFile)) {
+    try {
+      const entries = loadLibrary(oldLibFile);
+      for (const e of Object.values(entries)) {
+        if (e.fbx_file && !e.fbx_file.startsWith('rig_')) {
+          e.fbx_file = `rig_${LEGACY_BONES}/${e.fbx_file}`;
+        }
+        if (!e.rig_bones) e.rig_bones = LEGACY_BONES;
+      }
+      saveLibrary(entries, newLibFile);
+      fs.unlinkSync(oldLibFile);
+      migrated = true;
+      writeLog(`MIGRATE: animation-library.json → animation-library-${LEGACY_BONES}.json`);
+    } catch (err) { writeLog(`MIGRATE ERR library: ${err.message}`); }
+  }
+
+  if (migrated) {
+    const msg = `Migrated existing animations to rig_${LEGACY_BONES}/ folder (${LEGACY_BONES} bones).`;
     writeLog(msg);
     onProgress?.({ type: 'log', message: msg });
   }
@@ -443,7 +521,7 @@ function autoReorganize(outputDir, packMap, onProgress) {
 
 // ── Pack handler ─────────────────────────────────────────────────────
 
-async function downloadPack(bearer, characterId, anim, index, total, outputDir, gifDir, packMap, libraryEntries, onProgress) {
+async function downloadPack(bearer, characterId, anim, index, total, outputDir, gifDir, packMap, libraryEntries, onProgress, rigBones, rigDir) {
   const packDesc = anim.description;
   const result   = { downloaded: 0, exists: 0, failed: 0 };
 
@@ -452,8 +530,8 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
 
   if (details.motions && Array.isArray(details.motions) && details.motions.length > 0) {
     const packLabel   = sanitize(product.name || packDesc.substring(0, 40));
-    const packFbxDir  = path.join(outputDir, '_Packs', packLabel);
-    const packGifDir  = path.join(gifDir,    '_Packs', packLabel);
+    const packFbxDir  = path.join(rigDir, '_Packs', packLabel);
+    const packGifDir  = path.join(gifDir, '_Packs', packLabel);
     if (!fs.existsSync(packFbxDir)) fs.mkdirSync(packFbxDir, { recursive: true });
     if (!fs.existsSync(packGifDir)) fs.mkdirSync(packGifDir, { recursive: true });
 
@@ -478,7 +556,7 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
       const gifPath    = path.join(packGifDir, gifName);
 
       // Check flat folder — move if unambiguously ours
-      const flatPath = path.join(outputDir, filename);
+      const flatPath = path.join(rigDir, filename);
       if (!fs.existsSync(fbxPath) && fs.existsSync(flatPath) && packMap[filename] === packLabel) {
         try { fs.renameSync(flatPath, fbxPath); writeLog(`MOVED "${filename}" → _Packs/${packLabel}/`); } catch { /* will re-download */ }
       }
@@ -509,8 +587,9 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         }
 
         // Update library entry
+        const _existsId = motion.product_id || `${anim.id}_${sanitize(motionName)}`;
         upsertLibraryEntry(libraryEntries, {
-          id:                 motion.product_id || `${anim.id}_${sanitize(motionName)}`,
+          id:                 _existsId,
           motion_id:          motion.motion_id  || null,
           source:             'mixamo',
           type:               'Motion',
@@ -519,12 +598,13 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
           character_type:     anim.character_type || 'human',
           pack:               product.name || anim.name,
           pack_description:   anim.description || null,
-          fbx_file:           rel('_Packs', packLabel, filename),
+          fbx_file:           rel(`rig_${rigBones}`, '_Packs', packLabel, filename),
           gif_file:           rel('_GIF', '_Packs', packLabel, gifName),
           fbx_downloaded:     true,
           gif_downloaded:     fs.existsSync(gifPath),
           thumbnail:          packThumb,
           thumbnail_animated: packThumbGif,
+          ...(!libraryEntries[_existsId]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
         });
         continue;
       }
@@ -558,12 +638,14 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
           character_type:     anim.character_type || 'human',
           pack:               product.name || anim.name,
           pack_description:   anim.description || null,
-          fbx_file:           rel('_Packs', packLabel, filename),
+          fbx_file:           rel(`rig_${rigBones}`, '_Packs', packLabel, filename),
           gif_file:           rel('_GIF', '_Packs', packLabel, gifName),
           fbx_downloaded:     true,
           gif_downloaded:     gifOk,
           thumbnail:          packThumb,
           thumbnail_animated: packThumbGif,
+          rig_bones:          rigBones,
+          character_id:       characterId,
         });
 
         await sleep(DELAY_BETWEEN_MS);
@@ -576,7 +658,7 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
 
   } else if (details.gms_hash) {
     // Single animation with comma in name — goes to Animations/
-    const animDir   = path.join(outputDir, 'Animations');
+    const animDir   = path.join(rigDir, 'Animations');
     const filename  = sanitize(packDesc) + '.fbx';
     const gifName   = sanitize(packDesc) + '.gif';
     const fbxPath   = path.join(animDir, filename);
@@ -594,9 +676,10 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         id: anim.id, motion_id: anim.motion_id, source: 'mixamo', type: anim.type,
         name: anim.name, description: packDesc, character_type: anim.character_type,
         pack: null, pack_description: null,
-        fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
+        fbx_file: rel(`rig_${rigBones}`, 'Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: fs.existsSync(gifPath),
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        ...(!libraryEntries[anim.id]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
       });
     } else {
       const gms   = details.gms_hash;
@@ -616,9 +699,10 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
         id: anim.id, motion_id: anim.motion_id, source: 'mixamo', type: anim.type,
         name: anim.name, description: packDesc, character_type: anim.character_type,
         pack: null, pack_description: null,
-        fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
+        fbx_file: rel(`rig_${rigBones}`, 'Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: gifOk,
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        rig_bones: rigBones, character_id: characterId,
       });
       await sleep(DELAY_BETWEEN_MS);
     }
@@ -641,11 +725,13 @@ async function downloadPack(bearer, characterId, anim, index, total, outputDir, 
  * @param {AbortSignal} opts.abortSignal
  * @param {Function} opts.onProgress
  * @param {boolean} opts.forceRefresh
+ * @param {number} [opts.rigBones]      — number of bones in the character rig (e.g. 65 = with fingers, 25 = no fingers)
  */
-async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal, onProgress, forceRefresh }) {
-  // All output lives inside the user-chosen outputDir
+async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal, onProgress, forceRefresh, rigBones }) {
+  rigBones = rigBones || 65;
+  const rigDir         = getRigDir(outputDir, rigBones);
   const resolvedGifDir = gifDir || path.join(outputDir, '_GIF');
-  const libraryFile    = path.join(outputDir, 'animation-library.json');
+  const libraryFile    = getLibraryFile(outputDir, rigBones);
 
   // Load animation list
   let allAnims = forceRefresh ? null : loadCache();
@@ -666,15 +752,19 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
     saveCache(allAnims);
   }
 
+  // Migrate old flat structure (Animations/, _Packs/) → rig_25/ on first run
+  migrateToRigFolders(outputDir, onProgress);
+
   // Ensure output dirs exist
-  const animDir = path.join(outputDir, 'Animations');
+  const animDir = path.join(rigDir, 'Animations');
   if (!fs.existsSync(outputDir))        fs.mkdirSync(outputDir,        { recursive: true });
+  if (!fs.existsSync(rigDir))           fs.mkdirSync(rigDir,           { recursive: true });
   if (!fs.existsSync(animDir))          fs.mkdirSync(animDir,          { recursive: true });
   if (!fs.existsSync(resolvedGifDir))   fs.mkdirSync(resolvedGifDir,   { recursive: true });
 
-  // Build pack map + auto-reorganize existing flat FBX files
+  // Build pack map + auto-reorganize existing flat FBX files into rig dir
   const { packMap } = buildPackMap(allAnims);
-  autoReorganize(outputDir, packMap, onProgress);
+  autoReorganize(outputDir, packMap, onProgress, rigDir);
 
   // Load existing library (incremental updates)
   const libraryEntries = loadLibrary(libraryFile);
@@ -697,7 +787,7 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
       if (isPack) {
         const packResult = await downloadPack(
           bearer, characterId, anim, i + 1, total,
-          outputDir, resolvedGifDir, packMap, libraryEntries, onProgress
+          outputDir, resolvedGifDir, packMap, libraryEntries, onProgress, rigBones, rigDir
         );
         stats.downloaded += packResult.downloaded;
         stats.exists     += packResult.exists;
@@ -727,9 +817,11 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
           id: anim.id, motion_id: anim.motion_id, source: 'mixamo', type: anim.type,
           name: anim.name, description: name, character_type: anim.character_type,
           pack: null, pack_description: null,
-          fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
+          fbx_file: rel(`rig_${rigBones}`, 'Animations', filename), gif_file: rel('_GIF', gifName),
           fbx_downloaded: true, gif_downloaded: fs.existsSync(gifPath),
           thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+          // Retroactively tag only if not already set (file existed before this feature)
+          ...(!libraryEntries[anim.id]?.rig_bones ? { rig_bones: rigBones, character_id: characterId } : {}),
         });
 
         libDirtyCount++;
@@ -751,16 +843,17 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
       const gifOk = thumbGif ? await downloadGif(thumbGif, gifPath) : false;
 
       stats.downloaded++;
-      writeLog(`OK [${i+1}/${total}] ${(bytes/1024/1024).toFixed(2)}MB "Animations/${filename}" gif:${gifOk}`);
+      writeLog(`OK [${i+1}/${total}] ${(bytes/1024/1024).toFixed(2)}MB "rig_${rigBones}/Animations/${filename}" gif:${gifOk}`);
       onProgress?.({ type: 'done', index: i + 1, total, name: filename, bytes });
 
       upsertLibraryEntry(libraryEntries, {
         id: anim.id, motion_id: anim.motion_id, source: 'mixamo', type: anim.type,
         name: anim.name, description: name, character_type: anim.character_type,
         pack: null, pack_description: null,
-        fbx_file: rel('Animations', filename), gif_file: rel('_GIF', gifName),
+        fbx_file: rel(`rig_${rigBones}`, 'Animations', filename), gif_file: rel('_GIF', gifName),
         fbx_downloaded: true, gif_downloaded: gifOk,
         thumbnail: anim.thumbnail, thumbnail_animated: thumbGif,
+        rig_bones: rigBones, character_id: characterId,
       });
 
       libDirtyCount++;
@@ -777,7 +870,7 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
 
   // Final library save + README
   saveLibrary(libraryEntries, libraryFile);
-  saveReadme(allAnims, libraryEntries, outputDir);
+  saveReadme(allAnims, outputDir);
   onProgress?.({ type: 'log', message: `Library saved: ${libraryFile}` });
 
   return stats;
@@ -787,16 +880,36 @@ async function downloadAll({ bearer, characterId, outputDir, gifDir, abortSignal
 // Force-overwrites pack GIFs with individual thumbnails.
 // Regular GIFs are skipped if they already exist.
 
-async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, onProgress }) {
-  const gifDir      = path.join(outputDir, '_GIF');
-  const libraryFile = path.join(outputDir, 'animation-library.json');
+async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, onProgress, rigBones }) {
+  rigBones = rigBones || 65;
+  const gifDir = path.join(outputDir, '_GIF');
 
   const allAnims = loadCache();
   if (!allAnims) { throw new Error('No animation cache found. Run a full download first.'); }
 
   if (!fs.existsSync(gifDir)) fs.mkdirSync(gifDir, { recursive: true });
 
-  const libraryEntries = loadLibrary(libraryFile);
+  // Load all rig libraries (GIFs are shared — update gif fields in every rig library)
+  const libFiles = getAllLibraryFiles(outputDir);
+  // Fallback: if no rig libraries yet, use current rig
+  if (libFiles.length === 0) libFiles.push(getLibraryFile(outputDir, rigBones));
+  const allLibraries = {};
+  for (const lf of libFiles) allLibraries[lf] = loadLibrary(lf);
+
+  // Combined lookup dict (entries are references into allLibraries)
+  const libraryEntries = {};
+  for (const entries of Object.values(allLibraries)) Object.assign(libraryEntries, entries);
+
+  // Helper: apply gif update to all rig libraries that have this entry
+  function updateGifInAllLibs(id, gifOk, gifFile, gifUrl) {
+    for (const entries of Object.values(allLibraries)) {
+      if (entries[id]) {
+        entries[id].gif_downloaded = gifOk;
+        entries[id].gif_file = gifFile;
+        if (gifUrl) entries[id].thumbnail_animated = gifUrl;
+      }
+    }
+  }
 
   // Build thumbnail map from regular animations (id → thumbnail_animated)
   // Many pack motions ARE also regular animations — their thumbnails are in the cache!
@@ -838,11 +951,8 @@ async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, on
     if (!ok) failed++;
     progress(baseName, ok);
 
-    // Update library
-    if (libraryEntries[anim.id]) {
-      libraryEntries[anim.id].gif_downloaded = ok;
-      libraryEntries[anim.id].gif_file = rel('_GIF', baseName + '.gif');
-    }
+    // Update library (all rig variants)
+    updateGifInAllLibs(anim.id, ok, rel('_GIF', baseName + '.gif'), null);
   }
 
   // ── Pack motions — force individual thumbnails ──────────────────
@@ -879,16 +989,14 @@ async function downloadAllGifs({ bearer, characterId, outputDir, abortSignal, on
       if (!ok) failed++;
       progress(`${packLabel}/${baseName}`, ok);
 
-      if (libraryEntries[entryId]) {
-        libraryEntries[entryId].gif_downloaded = ok;
-        libraryEntries[entryId].gif_file = rel('_GIF', '_Packs', packLabel, baseName + '.gif');
-        if (gifUrl) libraryEntries[entryId].thumbnail_animated = gifUrl;
-      }
+      // Update all rig libraries
+      updateGifInAllLibs(entryId, ok, rel('_GIF', '_Packs', packLabel, baseName + '.gif'), gifUrl || null);
     }
   }
 
-  saveLibrary(libraryEntries, libraryFile);
-  saveReadme(allAnims, libraryEntries, outputDir);
+  // Save all rig libraries
+  for (const [lf, entries] of Object.entries(allLibraries)) saveLibrary(entries, lf);
+  saveReadme(allAnims, outputDir);
   return { downloaded, skipped, failed, total };
 }
 

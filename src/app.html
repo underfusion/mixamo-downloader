@@ -304,6 +304,18 @@
         </div>
 
         <div class="field-row">
+          <div class="field-label">Rig type</div>
+          <select class="field-input" id="rigBones" style="flex:1">
+            <option value="65">Standard Skeleton (65)</option>
+            <option value="49">3 Chain Fingers (49)</option>
+            <option value="41">2 Chain Fingers (41)</option>
+            <option value="25">No Fingers (25)</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <input id="rigBonesCustom" type="number" min="1" value="65" style="width:64px;display:none;margin-left:6px" title="Custom bone count">
+        </div>
+
+        <div class="field-row">
           <div class="field-label">Output folder</div>
           <div class="folder-row">
             <input class="field-input" id="outputDir" value="Animations" readonly>
@@ -389,6 +401,16 @@
     const btnRefresh = document.getElementById('btnRefresh');
     const outputDirInput = document.getElementById('outputDir');
     const characterIdInput = document.getElementById('characterId');
+    const rigBonesInput      = document.getElementById('rigBones');
+    const rigBonesCustomInput = document.getElementById('rigBonesCustom');
+    rigBonesInput.addEventListener('change', () => {
+      rigBonesCustomInput.style.display = rigBonesInput.value === 'custom' ? 'inline-block' : 'none';
+    });
+    function getRigBones() {
+      return rigBonesInput.value === 'custom'
+        ? (parseInt(rigBonesCustomInput.value, 10) || 65)
+        : parseInt(rigBonesInput.value, 10);
+    }
     const progressBarBg = document.getElementById('progressBarBg');
     const progressBarFill = document.getElementById('progressBarFill');
     const statsGrid = document.getElementById('statsGrid');
@@ -541,7 +563,8 @@
       statusDot.className = 'dot working';
       statusText.textContent = 'GIFs...';
 
-      const result = await window.api.downloadGifs({ token: currentToken, characterId, outputDir });
+      const rigBones = getRigBones();
+      const result = await window.api.downloadGifs({ token: currentToken, characterId, outputDir, rigBones });
 
       isDownloading = false;
       btnDownload.classList.remove('hidden');
@@ -605,11 +628,14 @@
       statusDot.className = 'dot working';
       statusText.textContent = 'Downloading...';
 
+      const rigBones = getRigBones();
+      addLog(`Rig: ${rigBonesInput.options[rigBonesInput.selectedIndex]?.text || rigBones + ' bones'}`, 'info');
       const result = await window.api.startDownload({
         token: currentToken,
         characterId,
         outputDir,
-        forceRefresh: forceRefreshNext
+        forceRefresh: forceRefreshNext,
+        rigBones
       });
       forceRefreshNext = false;
       btnRefreshList.textContent = '↻ Refresh animation list';
