@@ -1,4 +1,11 @@
 node_modules/
+
+# Local tooling / private notes (not for public repo)
+CLAUDE.md
+.claude/
+.claude-gui-temp/
+
+# Output / runtime artifacts
 Animations/
 animations-cache.json
 animation-library.json
