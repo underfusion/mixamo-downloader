@@ -2,8 +2,10 @@ node_modules/
 
 # Local tooling / private notes (not for public repo)
 CLAUDE.md
+AGENTS.md
 .claude/
 .claude-gui-temp/
+docs/memory/
 
 # Output / runtime artifacts
 Animations/
